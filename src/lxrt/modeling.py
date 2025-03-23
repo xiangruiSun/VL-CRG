@@ -937,7 +937,26 @@ class LXRTModel(nn.Module):
         causal_features = self.cee(nodes, edges, adjacency_matrix, bounding_boxes)
         return (lang_feats, causal_features), pooled_output
 
-
+class CEEPretraining(nn.Module):
+    def __init__(self, node_dim, edge_dim, hidden_dim, num_layers, vocab_size):
+        super().__init__()
+        self.cee = CausalEmbeddingEncoder(node_dim, edge_dim, hidden_dim, num_layers)
+        self.edge_pred_head = nn.Linear(hidden_dim, 1)
+        self.masked_lm_head = nn.Linear(hidden_dim, vocab_size)
+    
+    def forward(self, nodes, edges, adjacency_matrix, bounding_boxes, masked_tokens, labels):
+        causal_features = self.cee(nodes, edges, adjacency_matrix, bounding_boxes)
+        edge_predictions = torch.sigmoid(self.edge_pred_head(causal_features))
+        token_predictions = self.masked_lm_head(causal_features)
+        
+        loss_fct = nn.BCELoss()
+        lcrp_loss = loss_fct(edge_predictions, labels['edge_labels'])
+        
+        loss_fct_mlm = nn.CrossEntropyLoss()
+        lc_mlm_loss = loss_fct_mlm(token_predictions.view(-1, token_predictions.size(-1)), labels['masked_labels'].view(-1))
+        
+        total_loss = lcrp_loss + 0.5 * lc_mlm_loss
+        return total_loss, edge_predictions, token_predictions
 
 class LXRTPretraining(BertPreTrainedModel):
     def __init__(self,
