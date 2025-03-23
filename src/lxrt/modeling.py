@@ -30,6 +30,8 @@ from io import open
 import torch
 from torch import nn
 from torch.nn import CrossEntropyLoss, SmoothL1Loss
+import torch.nn.functional as F
+import numpy as np
 
 from .file_utils import cached_path
 
@@ -669,6 +671,57 @@ class BertPreTrainingHeads(nn.Module):
         seq_relationship_score = self.seq_relationship(pooled_output)
         return prediction_scores, seq_relationship_score
 
+class CausalEmbeddingEncoder(nn.Module):
+    def __init__(self, node_dim, edge_dim, hidden_dim, num_layers, k_eigenvectors=8):
+        super(CausalEmbeddingEncoder, self).__init__()
+        self.num_layers = num_layers
+        self.k_eigenvectors = k_eigenvectors
+        
+        self.gnn_layers = nn.ModuleList([
+            GNNLayer(node_dim + k_eigenvectors + 7, edge_dim, hidden_dim) for _ in range(num_layers)
+        ])
+
+    def forward(self, nodes, edges, adjacency_matrix, bounding_boxes):
+        spatial_features = self.compute_spatial_features(bounding_boxes)
+        positional_encoding = self.compute_positional_encoding(adjacency_matrix, nodes.shape[0])
+        nodes = torch.cat([nodes, spatial_features, positional_encoding], dim=-1)
+        
+        for gnn_layer in self.gnn_layers:
+            nodes, edges = gnn_layer(nodes, edges, adjacency_matrix)
+        
+        return nodes
+    
+    def compute_spatial_features(self, bounding_boxes):
+        x1, y1, x2, y2 = bounding_boxes[:, 0], bounding_boxes[:, 1], bounding_boxes[:, 2], bounding_boxes[:, 3]
+        w = x2 - x1
+        h = y2 - y1
+        a = w * h
+        spatial_features = torch.stack([x1, y1, x2, y2, w, h, a], dim=-1)
+        return spatial_features
+    
+    def compute_positional_encoding(self, adjacency_matrix, num_nodes):
+        degree_matrix = torch.diag(torch.sum(adjacency_matrix, dim=1))
+        laplacian = degree_matrix - adjacency_matrix
+        eigvals, eigvecs = torch.linalg.eigh(laplacian)
+        positional_encoding = eigvecs[:, 1:self.k_eigenvectors+1]
+        return positional_encoding
+
+class GNNLayer(nn.Module):
+    def __init__(self, node_dim, edge_dim, hidden_dim):
+        super(GNNLayer, self).__init__()
+        self.node_update = nn.Linear(node_dim + hidden_dim, hidden_dim)
+        self.edge_update = nn.Linear(edge_dim + 2 * hidden_dim, hidden_dim)
+        self.activation = nn.ReLU()
+    
+    def forward(self, nodes, edges, adjacency_matrix):
+        messages = torch.matmul(adjacency_matrix, nodes)
+        updated_nodes = self.activation(self.node_update(torch.cat([nodes, messages], dim=-1)))
+        sender_nodes = torch.matmul(adjacency_matrix, nodes)
+        receiver_nodes = nodes
+        edge_inputs = torch.cat([edges, sender_nodes, receiver_nodes], dim=-1)
+        updated_edges = self.activation(self.edge_update(edge_inputs))
+        
+        return updated_nodes, updated_edges
 
 class BertPreTrainedModel(nn.Module):
     """ An abstract class to handle weights initialization and
@@ -832,23 +885,21 @@ class BertPreTrainedModel(nn.Module):
         return model
 
 
-class LXRTModel(BertPreTrainedModel):
-    """LXRT Model."""
-
-    def __init__(self, config):
-        super().__init__(config)
-        self.embeddings = BertEmbeddings(config)
-        self.encoder = LXRTEncoder(config)
-        self.pooler = BertPooler(config)
+class LXRTModel(nn.Module):
+    def __init__(self, config, node_dim, edge_dim, hidden_dim, num_layers):
+        super().__init__()
+        self.embeddings = nn.Embedding(config.vocab_size, config.hidden_size)
+        self.encoder = nn.Transformer()
+        self.pooler = nn.Linear(config.hidden_size, config.hidden_size)
+        self.cee = CausalEmbeddingEncoder(node_dim, edge_dim, hidden_dim, num_layers)
         self.apply(self.init_bert_weights)
 
     def forward(self, input_ids, token_type_ids=None, attention_mask=None,
-                visual_feats=None, visual_attention_mask=None):
+                visual_feats=None, visual_attention_mask=None, nodes=None, edges=None, adjacency_matrix=None, bounding_boxes=None):
         if attention_mask is None:
             attention_mask = torch.ones_like(input_ids)
         if token_type_ids is None:
             token_type_ids = torch.zeros_like(input_ids)
-
         # We create a 3D attention mask from a 2D tensor mask.
         # Sizes are [batch_size, 1, 1, to_seq_length]
         # So we can broadcast to [batch_size, num_heads, from_seq_length, to_seq_length]
@@ -882,8 +933,10 @@ class LXRTModel(BertPreTrainedModel):
             visn_feats=visual_feats,
             visn_attention_mask=extended_visual_attention_mask)
         pooled_output = self.pooler(lang_feats)
+        
+        causal_features = self.cee(nodes, edges, adjacency_matrix, bounding_boxes)
+        return (lang_feats, causal_features), pooled_output
 
-        return (lang_feats, visn_feats), pooled_output
 
 
 class LXRTPretraining(BertPreTrainedModel):
