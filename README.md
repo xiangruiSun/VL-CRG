@@ -119,7 +119,7 @@ We evaluate **VL-CRG** on **Visual Commonsense Reasoning (VCR)** using the follo
 ## 📈 **Convergence Analysis**
 The graph below shows the validation accuracy trends during training.
 
-![Convergence Analysis](screenshots/convergence.png)
+![Convergence Analysis](output/convergence_analysis.png)
 
 - **Solid lines** indicate VL-CRG performance.
 - **Dashed lines** show baseline (w/o CRG) performance.
