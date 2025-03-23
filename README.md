@@ -132,7 +132,7 @@ If you find this work useful, please cite:
 ```bibtex
 @article{vl-crg2025,
   title={VL-CRG: Causal Relation Graph Pre-Training for Vision-Language Tasks},
-  author={Your Name et al.},
+  author={Xiangrui Sun et al.},
   journal={ArXiv},
   year={2025}
 }
