@@ -14,6 +14,8 @@ class VQAEval:
 		self.evalQA       = {}
 		self.evalQuesType = {}
 		self.evalAnsType  = {}
+		self.consistency_scores = {}
+        	self.sensitivity_scores = {}
 		self.vqa 		  = vqa
 		self.vqaRes       = vqaRes
 		self.params		  = {'question_id': vqa.getQuesIds()}
@@ -182,4 +184,82 @@ class VQAEval:
 		text = "\rFinshed Percent: [{0}] {1}% {2}".format( "#"*block + "-"*(barLength-block), int(progress*100), status)
 		sys.stdout.write(text)
 		sys.stdout.flush()
+		
+	def compute_consistency(self):
+        """
+        Compute consistency by evaluating whether the model's answers are logically coherent
+        across related questions in the same image.
+        """
+        related_qa_pairs = self.group_related_questions()
+
+        for _, qa_pairs in related_qa_pairs.items():
+            if len(qa_pairs) < 2:
+                continue  # Skip if there aren't multiple related questions
+
+            answers = [self.vqaRes.qa[qid]['answer'] for qid in qa_pairs]
+            unique_answers = set(answers)
+
+            # Consistency score: 1 if all answers match, otherwise penalized
+            consistency = 1.0 if len(unique_answers) == 1 else 1.0 - (len(unique_answers) - 1) / len(qa_pairs)
+            self.consistency_scores.append(consistency)
+
+        return np.mean(self.consistency_scores) if self.consistency_scores else 0.0
+
+	def compute_sensitivity(self):
+        """
+        Compute sensitivity by evaluating the model's response changes due to input perturbations.
+        """
+        perturbed_qa_pairs = self.group_perturbed_questions()
+
+        for _, (orig_qid, pert_qid) in perturbed_qa_pairs.items():
+            orig_answer = self.vqaRes.qa[orig_qid]['answer']
+            pert_answer = self.vqaRes.qa[pert_qid]['answer']
+
+            # Sensitivity score: 1 if answer changes when expected, 0 if it remains the same incorrectly
+            expected_change = self.is_expected_to_change(orig_qid, pert_qid)
+            sensitivity = 1.0 if (orig_answer != pert_answer) == expected_change else 0.0
+            self.sensitivity_scores.append(sensitivity)
+
+        return np.mean(self.sensitivity_scores) if self.sensitivity_scores else 0.0
+	
+	def group_related_questions(self):
+        """
+        Group logically related questions for consistency evaluation.
+        Returns a dictionary {image_id: [question_ids]}.
+        """
+        related_qa_pairs = {}
+        for qid, qdata in self.vqa.qa.items():
+            img_id = qdata['image_id']
+            if img_id not in related_qa_pairs:
+                related_qa_pairs[img_id] = []
+            related_qa_pairs[img_id].append(qid)
+        return related_qa_pairs
+
+    def group_perturbed_questions(self):
+        """
+        Group perturbed question pairs for sensitivity evaluation.
+        Returns a dictionary {image_id: (original_qid, perturbed_qid)}.
+        """
+        perturbed_qa_pairs = {}
+        for qid, qdata in self.vqa.qa.items():
+            img_id = qdata['image_id']
+            if 'perturbed_version' in qdata:
+                pert_qid = qdata['perturbed_version']
+                perturbed_qa_pairs[img_id] = (qid, pert_qid)
+        return perturbed_qa_pairs
+
+    def is_expected_to_change(self, orig_qid, pert_qid):
+        """
+        Determine if an answer is expected to change given the perturbation.
+        This logic can be dataset-specific based on question type.
+        """
+        orig_question = self.vqa.qa[orig_qid]['question']
+        pert_question = self.vqa.qa[pert_qid]['question']
+
+        # Example: If the perturbation involves changing 'he' to 'she', expect a change
+        if ('he' in orig_question and 'she' in pert_question) or ('she' in orig_question and 'he' in pert_question):
+            return True
+        return False
+
+	
 
