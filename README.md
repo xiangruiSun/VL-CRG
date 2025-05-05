@@ -142,8 +142,9 @@ python -u src/tasks/vqa.py \
 --batchSize 32 --epochs 20 \
 --name vl-crg-spatial
 ```
-```bash
+
 With spatial + positional encoding:
+```bash
 PYTHONPATH=$PYTHONPATH:./src \
 python -u src/tasks/vqa.py \
 --train train --valid val \
@@ -153,9 +154,10 @@ python -u src/tasks/vqa.py \
 --batchSize 32 --epochs 20 \
 --name vl-crg-positional
 ```
+
 ---
 
-###8️⃣ Pre-training Task Ablation (CRG + MLM/MRC/OPR)
+###8️⃣ **Pre-training Task Ablation (CRG + MLM/MRC/OPR)**
 To compare different pre-training objectives (e.g., CRG vs. CRG + MLM + MRC + SRC + OPR):
 
 Run pre-training:
