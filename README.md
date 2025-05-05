@@ -156,8 +156,8 @@ python -u src/tasks/vqa.py \
 ```
 
 ---
+### 8️⃣ **Pre-training Task Ablation (CRG + MLM/MRC/OPR)**
 
-###8️⃣ **Pre-training Task Ablation (CRG + MLM/MRC/OPR)**
 To compare different pre-training objectives (e.g., CRG vs. CRG + MLM + MRC + SRC + OPR):
 
 Run pre-training:
