@@ -105,11 +105,11 @@ python -u src/tasks/nlvr2.py \
 --loadLXMERTQA snap/pretrained/model \
 --batchSize 32 --optim bert --lr 3e-5 --epochs 20 \
 --name vl-crg-nlvr2
-
+```
 ---
 
 ### 6️⃣ **Evaluating VL-CRG on NLVR²**
-
+```bash
 PYTHONPATH=$PYTHONPATH:./src \
 python -u src/tasks/nlvr2.py \
 --train train --test test \
@@ -117,11 +117,12 @@ python -u src/tasks/nlvr2.py \
 --loadLXMERTQA snap/pretrained/model \
 --batchSize 32 --load output/vl-crg-nlvr2.pth \
 --tqdm
-
+```
 ---
 
 ### 7️⃣ Running Ablation Studies (Spatial / Positional Encoding)
 Baseline (no spatial or positional encoding):
+```bash
 PYTHONPATH=$PYTHONPATH:./src \
 python -u src/tasks/vqa.py \
 --train train --valid val \
@@ -129,7 +130,9 @@ python -u src/tasks/vqa.py \
 --loadLXMERTQA snap/pretrained/model \
 --batchSize 32 --epochs 20 \
 --name vl-crg-base
+```
 With spatial encoding only:
+```bash
 PYTHONPATH=$PYTHONPATH:./src \
 python -u src/tasks/vqa.py \
 --train train --valid val \
@@ -138,6 +141,8 @@ python -u src/tasks/vqa.py \
 --loadLXMERTQA snap/pretrained/model \
 --batchSize 32 --epochs 20 \
 --name vl-crg-spatial
+```
+```bash
 With spatial + positional encoding:
 PYTHONPATH=$PYTHONPATH:./src \
 python -u src/tasks/vqa.py \
@@ -147,14 +152,14 @@ python -u src/tasks/vqa.py \
 --loadLXMERTQA snap/pretrained/model \
 --batchSize 32 --epochs 20 \
 --name vl-crg-positional
-
+```
 ---
 
 ###8️⃣ Pre-training Task Ablation (CRG + MLM/MRC/OPR)
 To compare different pre-training objectives (e.g., CRG vs. CRG + MLM + MRC + SRC + OPR):
 
 Run pre-training:
-
+```bash
 PYTHONPATH=$PYTHONPATH:./src \
 python -u src/pretrain/train_crg.py \
 --task pretrain \
@@ -162,8 +167,11 @@ python -u src/pretrain/train_crg.py \
 --loadLXMERT snap/pretrained/model \
 --batchSize 32 --epochs 30 \
 --output output/vl-crg-pretrain-full
+```
 You can ablate by removing tasks (e.g., --pretrain_tasks mlm,crg or --pretrain_tasks crg). After pretraining, fine-tune with the command in step 3️⃣ using the newly saved checkpoint:
+```bash
 --load output/vl-crg-pretrain-full.pth
+```
 ## 📊 **Performance Metrics**
 We evaluate **VL-CRG** on **Visual Commonsense Reasoning (VCR)** using the following metrics:
 
